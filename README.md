@@ -14,7 +14,11 @@ Browse, play and watch Live TV in any modern browser, behind your own sign-in wi
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 ![Passkeys](https://img.shields.io/badge/sign--in-passkeys%20%2B%20TOTP-6E56CF)
 
-[Features](#-features) · [How it works](#-how-it-works) · [Install](#-install) · [Using it](#-using-it) · [Development](#-development)
+[Features](#-features) · [Screenshots](#-screenshots) · [How it works](#-how-it-works) · [Install](#-install) · [Using it](#-using-it) · [Development](#-development)
+
+<br />
+
+<img src="docs/screenshots/home.webp" alt="The home screen: a Continue Watching banner and rows of shows" width="100%" />
 
 </div>
 
@@ -71,6 +75,32 @@ Browse, play and watch Live TV in any modern browser, behind your own sign-in wi
 </table>
 
 Works on phones and desktops, installs as an app (PWA), and supports keyboard control: see the [player guide](docs/player.md).
+
+## 📸 Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/details.webp" alt="A movie's details page with poster, ratings, badges and cast" /><p align="center"><sub><b>Details</b>: versions, ratings, 4K / Dolby Vision / Atmos badges, cast</sub></p></td>
+<td width="50%"><img src="docs/screenshots/player.webp" alt="The player paused mid-scene with its controls" /><p align="center"><sub><b>Player</b>: quality, subtitles, chapters, previews and keyboard control</sub></p></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/library.webp" alt="The movie library as a poster grid with sort, filters and an A–Z bar" /><p align="center"><sub><b>Library</b>: sort, filters and A–Z jump</sub></p></td>
+<td width="50%"><img src="docs/screenshots/guide.webp" alt="The Live TV program guide with a now marker" /><p align="center"><sub><b>Live TV guide</b>: channels, airings and a now marker</sub></p></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/whats-on.webp" alt="What's On: programs airing now with channel and time left" /><p align="center"><sub><b>What's On</b>: everything airing now, with time left</sub></p></td>
+</tr>
+</table>
+
+<details>
+<summary><b>📱 On a phone</b></summary>
+<br />
+<p align="center">
+<img src="docs/screenshots/phone-home.webp" alt="Home screen on a phone" width="30%" />&nbsp;
+<img src="docs/screenshots/phone-details.webp" alt="A movie's details on a phone" width="30%" />&nbsp;
+<img src="docs/screenshots/phone-guide.webp" alt="The Live TV guide on a phone" width="30%" />
+</p>
+</details>
 
 ## 🧭 How it works
 
