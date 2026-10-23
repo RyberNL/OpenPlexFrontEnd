@@ -1,0 +1,15 @@
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# Stream responses as they arrive (HLS playlists and segments, progressive subtitles).
+		flush_interval -1
+	}
+}

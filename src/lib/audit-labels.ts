@@ -1,0 +1,25 @@
+/** Human-readable labels for audit events (shared by server and UI). */
+export const AUDIT_LABELS: Record<string, string> = {
+	'setup.admin_created': 'First admin created',
+	'auth.login_succeeded': 'Signed in',
+	'auth.login_failed': 'Sign-in failed',
+	'auth.mfa_failed': 'Two-factor check failed',
+	'auth.account_locked': 'Account locked',
+	'auth.logout': 'Signed out',
+	'auth.session_revoked': 'Session revoked',
+	'auth.password_changed': 'Password changed',
+	'mfa.totp_enrolled': 'Authenticator app added',
+	'mfa.passkey_registered': 'Passkey added',
+	'mfa.factor_renamed': 'Sign-in method renamed',
+	'mfa.factor_removed': 'Sign-in method removed',
+	'mfa.recovery_codes_generated': 'Recovery codes generated',
+	'mfa.recovery_code_used': 'Recovery code used',
+	'admin.user_created': 'User created',
+	'admin.user_updated': 'User updated',
+	'admin.user_disabled': 'User disabled',
+	'admin.user_enabled': 'User enabled',
+	'admin.user_deleted': 'User deleted',
+	'admin.mfa_reset': 'Two-factor reset',
+	'admin.plex_mapping_changed': 'Plex user mapping changed',
+	'admin.plex_linked': 'Plex server linked'
+};

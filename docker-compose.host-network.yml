@@ -1,0 +1,15 @@
+# Optional: run the app on the host network, for when Plex runs on the same host. Plex then sees
+# the app's requests as coming from the host (local), not from a Docker network it treats as
+# remote ("WAN"), which matters for Plex's remote-streaming rules. The app listens on
+# APP_BIND:APP_PORT directly (default 127.0.0.1:3000), so keep APP_BIND on 127.0.0.1 unless your
+# reverse proxy runs elsewhere.
+#
+# Use it by adding this line to .env (then plain `docker compose ...` commands include it):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.host-network.yml
+services:
+  app:
+    network_mode: host
+    ports: !reset []
+    environment:
+      HOST: ${APP_BIND:-127.0.0.1}
+      PORT: ${APP_PORT:-3000}

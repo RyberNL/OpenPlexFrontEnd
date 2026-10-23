@@ -1,0 +1,48 @@
+# The app, and optionally a bundled Caddy (TLS, HSTS). Settings come from .env next to this file
+# (see .env.example).
+#
+#   docker compose --profile caddy up -d   app + bundled Caddy on ports 80/443
+#   docker compose up -d                   app only, behind your own reverse proxy (APP_PORT)
+services:
+  app:
+    build: .
+    image: openplexfrontend:latest
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env}
+      # SvelteKit builds request URLs from this instead of trusting Host/X-Forwarded headers.
+      ORIGIN: ${PUBLIC_ORIGIN}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?Set APP_ENCRYPTION_KEY in .env}
+      PLEX_URL: ${PLEX_URL:-http://127.0.0.1:32400}
+      # Proxies between the internet and the app: 1 for a single reverse proxy (see operations.md).
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+    volumes:
+      - app-data:/data
+    # For an existing reverse proxy on this host. Keep it on 127.0.0.1 unless the proxy runs
+    # elsewhere: the app trusts the client IP in X-Forwarded-For, which only the proxy may set.
+    ports:
+      - '${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000'
+
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: [caddy]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      # The public hostname, e.g. plex.example.com (Caddy gets a Let's Encrypt certificate for it).
+      SITE_ADDRESS: ${SITE_ADDRESS:-}
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+      - '${HTTPS_PORT:-443}:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:
