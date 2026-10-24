@@ -58,6 +58,7 @@
 
 	let detach: (() => void) | undefined;
 	let released = false;
+	let releasing: Promise<void> | undefined;
 	let reportTimer: ReturnType<typeof setInterval> | undefined;
 	let clockTimer: ReturnType<typeof setInterval> | undefined;
 	let bufferTimer: ReturnType<typeof setInterval> | undefined;
@@ -79,6 +80,8 @@
 	async function tune() {
 		loading = true;
 		error = null;
+		// After a stream error, the old playback must be gone before its tuner can be had again.
+		await releasing;
 		const response = await fetch('/api/live/tune', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -96,7 +99,11 @@
 		info = await response.json();
 		released = false;
 		await tick();
-		detach = await attachStream(video!, info!, (message) => (error = { message, busy: false }));
+		detach = await attachStream(video!, info!, (message) => {
+			error = { message, busy: false };
+			// A dead stream must not keep reporting (which keeps renewing the tuner) or hold the tuner.
+			releasing = release();
+		});
 		await video!.play().catch(() => {
 			// Autoplay may be blocked; the play button remains available.
 		});

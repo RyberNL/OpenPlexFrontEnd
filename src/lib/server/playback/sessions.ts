@@ -43,10 +43,17 @@ export type PlaybackSession = {
 	/** Item time (ms) from which the item counts as watched; null for extras. */
 	watchedAt: number | null;
 	/**
-	 * Live TV: the tuned channel, the tuner grab to delete when the playback ends, and the live
-	 * session key PMS reports progress under.
+	 * Live TV: the tuned channel, the tuner grab to delete when the playback ends, the live session
+	 * key PMS reports progress under, and the tune request with when it was last sent (see
+	 * `renewTuner`).
 	 */
-	live?: { channelId: string; grabKey: string; sessionKey: string };
+	live?: {
+		channelId: string;
+		grabKey: string;
+		sessionKey: string;
+		tunePath: string;
+		tunedAt: number;
+	};
 	/** Preview thumbnails, loaded on first use; null when PMS has none or they're unreadable. */
 	previews?: Promise<Bif | null>;
 	/** Whether this playback already marked the item watched. */

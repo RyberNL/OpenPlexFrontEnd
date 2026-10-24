@@ -9,6 +9,7 @@ export async function fakePms(
 		| 'clear-patches'
 		| 'fail-transcode'
 		| 'heal-transcode'
+		| 'end-live'
 		| 'no-dvr'
 		| 'with-dvr'
 		| 'occupy-tuner'

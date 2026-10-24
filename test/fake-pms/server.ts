@@ -816,6 +816,16 @@ export function createFakePms({ fixturesDir = FIXTURES }: FakePmsOptions = {}) {
 					};
 					return send(res, 200, { ok: true });
 				}
+				if (action === 'end-live') {
+					// PMS ends the tuner subscription by itself: the grab is gone and live streams stop.
+					state.tuner = null;
+					for (const transcode of state.transcodes.values()) {
+						if (/^\/library\/metadata\/77\d{4}$/.test(transcode.query.path ?? '')) {
+							transcode.stopped = true;
+						}
+					}
+					return send(res, 200, { ok: true });
+				}
 				if (action === 'free-tuner') {
 					state.tuner = null;
 					state.tunes = [];
@@ -997,9 +1007,15 @@ export function createFakePms({ fixturesDir = FIXTURES }: FakePmsOptions = {}) {
 					req.headers['x-plex-client-identifier'] ?? query['X-Plex-Client-Identifier'] ?? ''
 				);
 				const grabKey = `/media/grabbers/operations/${channel}-${client}`;
-				const busy = state.tuner !== null;
+				// Tuning again keeps the client's existing grab (and its subscription alive).
+				const again = state.tuner?.grabKey === grabKey;
+				const busy = state.tuner !== null && !again;
 				state.tunes.push({ channel, client, ok: !busy });
-				const ratingKey = busy ? '' : String(770000 + ++state.liveItems);
+				const ratingKey = busy
+					? ''
+					: again
+						? state.tuner!.ratingKey
+						: String(770000 + ++state.liveItems);
 				if (!busy) state.tuner = { grabKey, channel, ratingKey };
 				return send(res, 200, {
 					MediaContainer: {

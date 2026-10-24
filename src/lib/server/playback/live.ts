@@ -84,11 +84,12 @@ export async function startLive(
 		deviceName: describeUserAgent(userAgent),
 		platform: 'Web'
 	};
-	const tuned = await plex.json(
-		`/livetv/dvrs/${plexId(dvr.dvrId)}/channels/${encodeURIComponent(channel.id)}/tune`,
-		tuneSchema,
-		{ method: 'POST', identity: device, query: { autoPreview: 0 } }
-	);
+	const tunePath = `/livetv/dvrs/${plexId(dvr.dvrId)}/channels/${encodeURIComponent(channel.id)}/tune`;
+	const tuned = await plex.json(tunePath, tuneSchema, {
+		method: 'POST',
+		identity: device,
+		query: { autoPreview: 0 }
+	});
 	const grab = tuned.MediaContainer.MediaSubscription?.[0]?.MediaGrabOperation?.[0];
 	if (!grab) throw new UnavailableError('The channel could not be tuned');
 	const release = () =>
@@ -137,7 +138,13 @@ export async function startLive(
 		subtitleMode: 'none',
 		subtitle: null,
 		watchedAt: null,
-		live: { channelId: channel.id, grabKey: grab.key, sessionKey: grab.Metadata.key }
+		live: {
+			channelId: channel.id,
+			grabKey: grab.key,
+			sessionKey: grab.Metadata.key,
+			tunePath,
+			tunedAt: Date.now()
+		}
 	});
 	const now = Date.now();
 	const airing = await guideWindow(plex, dvr, now)

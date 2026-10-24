@@ -54,6 +54,31 @@ test('watching a channel tunes it and shows the current program', async ({ page 
 	await expect.poll(tunedChannel).toBeNull();
 });
 
+test('when the server ends the stream, the player frees the tuner and Try again tunes afresh', async ({
+	page
+}) => {
+	await page.goto('/watch/live/1032');
+	await waitUntilLive(page);
+
+	const released = page.waitForRequest(
+		(r) => r.method() === 'DELETE' && /\/api\/playback\/[^/]+$/.test(r.url())
+	);
+	await fakePms('end-live');
+	await expect(page.getByTestId('live-error')).toHaveText('The stream was interrupted.', {
+		timeout: 30_000
+	});
+	await released;
+
+	await page.getByRole('button', { name: 'Try again' }).click();
+	await waitUntilLive(page);
+	const tunes = (await fakeTuner()).tunes;
+	expect(tunes.map((t) => [t.channel, t.ok])).toEqual([
+		['1032', true],
+		['1032', true]
+	]);
+	expect(await tunedChannel()).toBe('1032');
+});
+
 test('with the tuner in use, the player says so and does not play', async ({ page }) => {
 	await fakePms('occupy-tuner');
 	await page.goto('/watch/live/1032');

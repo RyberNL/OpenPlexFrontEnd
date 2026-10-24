@@ -5,7 +5,14 @@ import { pollLink, startLink } from '../plex/link';
 import { plexFor } from '../plex/session';
 import { insertUser, testDb } from '../test-utils';
 import { allPlaybacks, createPlayback } from './sessions';
-import { reportTimeline, STALE_AFTER, sweepStalePlaybacks, watchedThreshold } from './timeline';
+import {
+	renewTuner,
+	reportTimeline,
+	RETUNE_AFTER,
+	STALE_AFTER,
+	sweepStalePlaybacks,
+	watchedThreshold
+} from './timeline';
 import { makeItem } from '#lib/test-items.js';
 
 const pms = createFakePms();
@@ -75,6 +82,45 @@ describe('timeline reporting', () => {
 		expect(pms.state.transcodes.get(p.plexSession)?.stopped).toBe(true);
 		const last = pms.state.timelines.filter((t) => t.session === p.plexSession).at(-1);
 		expect(last).toMatchObject({ state: 'stopped', time: '61000' });
+	});
+});
+
+describe('live tuner renewal', () => {
+	it('tunes the channel again once a minute, keeping the grab', async () => {
+		const plex = plexFor(db, db.select().from(users).all()[0]);
+		const start = Date.now();
+		const p = createPlayback({
+			...playback('transcode'),
+			live: {
+				channelId: '1000',
+				grabKey: '/media/grabbers/operations/1000-plex-web-device',
+				sessionKey: '/livetv/sessions/live-1',
+				tunePath: '/livetv/dvrs/1/channels/1000/tune',
+				tunedAt: start
+			}
+		});
+		const tunes = () => pms.state.tunes.length;
+		const before = tunes();
+
+		await renewTuner(plex, p, start + RETUNE_AFTER - 1);
+		expect(tunes()).toBe(before);
+
+		await renewTuner(plex, p, start + RETUNE_AFTER);
+		expect(pms.state.tunes.at(-1)).toEqual({
+			channel: '1000',
+			client: 'plex-web-device',
+			ok: true
+		});
+		await renewTuner(plex, p, start + RETUNE_AFTER + 1_000);
+		expect(tunes()).toBe(before + 1);
+		pms.state.tuner = null;
+	});
+
+	it('does nothing for library playback', async () => {
+		const plex = plexFor(db, db.select().from(users).all()[0]);
+		const before = pms.state.tunes.length;
+		await renewTuner(plex, playback('transcode'), Date.now() + RETUNE_AFTER * 10);
+		expect(pms.state.tunes.length).toBe(before);
 	});
 });
 

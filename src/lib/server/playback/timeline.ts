@@ -73,6 +73,26 @@ export async function releaseTuner(plex: PlexSession, playback: PlaybackSession)
 	await plex.fetch(playback.live.grabKey, { method: 'DELETE', identity: playback.device });
 }
 
+/** How often a live playback tunes its channel again (see `renewTuner`). */
+export const RETUNE_AFTER = 60_000;
+
+/**
+ * Keeps a live playback's tuner. PMS ends a tuner subscription as idle after about four minutes,
+ * however much is streamed from it, unless the client tunes the channel again; Plex's own apps do
+ * so every few minutes, and PMS then keeps the existing grab. Called on the player's reports, so
+ * renewing stops when the player does.
+ */
+export async function renewTuner(plex: PlexSession, playback: PlaybackSession, now = Date.now()) {
+	const live = playback.live;
+	if (!live || now - live.tunedAt < RETUNE_AFTER) return;
+	live.tunedAt = now;
+	await plex.fetch(live.tunePath, {
+		method: 'POST',
+		identity: playback.device,
+		query: { autoPreview: 0 }
+	});
+}
+
 /** Ends a playback: final "stopped" report, transcode stop, tuner release, and forget it. */
 export async function endPlayback(plex: PlexSession, playback: PlaybackSession, time?: number) {
 	removePlayback(playback.id);
