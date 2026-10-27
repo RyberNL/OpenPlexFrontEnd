@@ -107,7 +107,10 @@
 	</div>
 </nav>
 
-<div class="min-h-dvh pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0 md:pl-60">
+<!-- Clear of the notch / Dynamic Island: the page draws under it (viewport-fit=cover). -->
+<div
+	class="min-h-dvh pt-[env(safe-area-inset-top)] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0 md:pl-60"
+>
 	<main id="main" tabindex="-1" class="outline-none">
 		{@render children()}
 	</main>

@@ -2,6 +2,12 @@
 
 What changed in each version of OpenPlexFrontEnd. The running version is shown under **Settings → About** and at the bottom of the sidebar.
 
+## [0.3.2] - 2026-10-27
+
+### Fixed
+
+- On iPhones with a notch or Dynamic Island, the search bar and the top of other pages sat under it; pages now start below it.
+
 ## [0.3.1] - 2026-10-27
 
 ### Changed
