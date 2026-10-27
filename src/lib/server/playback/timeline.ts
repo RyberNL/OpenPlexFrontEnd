@@ -34,6 +34,7 @@ export async function reportTimeline(
 	report: TimelineReport
 ) {
 	recordReport(playback, report.state, report.time);
+	if (playback.live) playback.live.reportedAt = Date.now();
 	await plex.fetch('/:/timeline', {
 		identity: playback.device,
 		headers: { 'X-Plex-Session-Identifier': playback.plexSession },
@@ -73,24 +74,22 @@ export async function releaseTuner(plex: PlexSession, playback: PlaybackSession)
 	await plex.fetch(playback.live.grabKey, { method: 'DELETE', identity: playback.device });
 }
 
-/** How often a live playback tunes its channel again (see `renewTuner`). */
-export const RETUNE_AFTER = 60_000;
+/** How long a live playback may go without a timeline report before the relay sends one. */
+export const LIVE_REPORT_EVERY = 30_000;
 
 /**
- * Keeps a live playback's tuner. PMS ends a tuner subscription as idle after about four minutes,
- * however much is streamed from it, unless the client tunes the channel again; Plex's own apps do
- * so every few minutes, and PMS then keeps the existing grab. Called on the player's reports, so
- * renewing stops when the player does.
+ * Keeps a live playback's tuner while it is watched without the player reporting (a Chromecast
+ * after the page that cast it is gone). PMS ends a tuner subscription as idle after about four
+ * minutes without timeline reports for its session, however much is streamed from it.
  */
-export async function renewTuner(plex: PlexSession, playback: PlaybackSession, now = Date.now()) {
+export async function keepLiveAlive(
+	plex: PlexSession,
+	playback: PlaybackSession,
+	now = Date.now()
+) {
 	const live = playback.live;
-	if (!live || now - live.tunedAt < RETUNE_AFTER) return;
-	live.tunedAt = now;
-	await plex.fetch(live.tunePath, {
-		method: 'POST',
-		identity: playback.device,
-		query: { autoPreview: 0 }
-	});
+	if (!live || now - live.reportedAt < LIVE_REPORT_EVERY) return;
+	await reportTimeline(plex, playback, { state: 'playing', time: playback.lastTime ?? 0 });
 }
 
 /** Ends a playback: final "stopped" report, transcode stop, tuner release, and forget it. */

@@ -40,6 +40,32 @@
 }
 
 @layer components {
+	/* Player control bars, kept clear of the notch, Dynamic Island and home indicator: the page
+	   extends under them (viewport-fit=cover). */
+	.player-bar-top,
+	.player-bar-bottom {
+		--bar-pad: 0.75rem;
+		padding-right: max(var(--bar-pad), env(safe-area-inset-right));
+		padding-left: max(var(--bar-pad), env(safe-area-inset-left));
+	}
+	.player-bar-top {
+		padding-top: max(var(--bar-pad), env(safe-area-inset-top));
+		padding-bottom: var(--bar-pad);
+	}
+	.player-bar-bottom {
+		padding-top: 2.5rem;
+		padding-bottom: max(var(--bar-pad), env(safe-area-inset-bottom));
+	}
+	@media (width >= 48rem) {
+		.player-bar-top,
+		.player-bar-bottom {
+			--bar-pad: 1.25rem;
+		}
+		.player-bar-bottom {
+			padding-top: var(--bar-pad);
+		}
+	}
+
 	.btn {
 		display: inline-flex;
 		min-height: 44px;

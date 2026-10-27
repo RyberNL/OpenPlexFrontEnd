@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import PosterCard from '#lib/components/PosterCard.svelte';
+	import { searchDraft } from '#lib/search-draft.svelte.js';
 	import type { SearchResults } from '#lib/plex-types.js';
 	import type { PageProps } from './$types';
 
@@ -37,6 +38,15 @@
 	let input: HTMLInputElement | undefined = $state();
 
 	onMount(() => {
+		// Opened by typing into a SearchBar: carry on where the typing is, with the cursor here.
+		if (searchDraft.pending && input) {
+			searchDraft.pending = false;
+			query = searchDraft.text;
+			input.focus();
+			input.setSelectionRange(query.length, query.length);
+			if (query.trim() !== data.q) void run();
+			return;
+		}
 		// Text typed before the page finished loading never fired our input handler.
 		if (input && input.value !== data.q) {
 			query = input.value;

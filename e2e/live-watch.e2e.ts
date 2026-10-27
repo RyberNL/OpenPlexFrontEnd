@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './support/test';
 import { signInAs } from './support/auth';
 import { mapToPlexOwner, seedUser } from './support/db';
+import { castLoads, fakeChromecast } from './support/cast';
 import { fakePms, fakeTuner } from './support/fake-pms';
 
 test.beforeEach(async ({ context }) => {
@@ -47,6 +48,8 @@ test('watching a channel tunes it and shows the current program', async ({ page 
 	await expect(page.getByTestId('live-badge')).toHaveText('LIVE');
 	expect(await tunedChannel()).toBe('1032');
 	expect((await fakeTuner()).tunes.at(-1)?.client).toMatch(/^plex-web-/);
+	// Tuned under the playback's session, so its timeline reports keep the tuner (as on real PMS).
+	expect((await fakeTuner()).tunes.at(-1)?.session).not.toBe('');
 
 	// Back within the app (no page unload) frees the tuner too.
 	await page.getByRole('button', { name: 'Back' }).click();
@@ -130,4 +133,27 @@ test('pausing falls behind live, and Go live catches up', async ({ page }) => {
 	await expect(page.getByTestId('behind')).toBeVisible({ timeout: 20_000 });
 	await page.getByRole('button', { name: 'Go live' }).click();
 	await expect(page.getByTestId('live-badge')).toBeVisible({ timeout: 10_000 });
+});
+
+test('a channel can be cast to a Chromecast on the same tuner, and comes back here', async ({
+	page
+}) => {
+	test.skip(!test.info().project.name.startsWith('chromium'), 'Chromecast is Chrome-only');
+	await fakeChromecast(page);
+	await page.goto('/watch/live/1032');
+	await waitUntilLive(page);
+
+	await page.getByRole('button', { name: 'Cast' }).click();
+	await expect.poll(async () => (await castLoads(page)).length).toBe(1);
+	const [load] = await castLoads(page);
+	expect(load).toMatchObject({ contentType: 'application/x-mpegurl', streamType: 'LIVE' });
+	expect(load.url).toMatch(/\/stream\/cast_[\w-]+\/master\.m3u8$/);
+	await expect(page.getByTestId('casting')).toHaveText('Playing on Living Room TV');
+	expect((await fakeTuner()).tunes).toHaveLength(1);
+	expect(await tunedChannel()).toBe('1032');
+
+	await page.getByRole('button', { name: 'Stop casting' }).click();
+	await expect(page.getByTestId('casting')).toBeHidden();
+	await waitUntilLive(page);
+	expect((await fakeTuner()).tunes).toHaveLength(1);
 });

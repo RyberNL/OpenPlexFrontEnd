@@ -3,30 +3,37 @@
 	import { resolve } from '$app/paths';
 	import Icon from '#lib/components/Icon.svelte';
 	import type { IconName } from '#lib/icons.js';
+	import { APP_VERSION } from '#lib/version.js';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
 
 	type NavItem = { href: string; label: string; icon: IconName };
 
-	const sidebar = $derived<NavItem[]>([
-		{ href: resolve('/(app)'), label: 'Home', icon: 'home' },
-		{ href: resolve('/(app)/search'), label: 'Search', icon: 'search' },
-		{ href: resolve('/(app)/playlists'), label: 'Playlists', icon: 'libraries' },
-		...(data.liveTv
-			? [{ href: resolve('/(app)/live'), label: 'Live TV', icon: 'live' as IconName }]
-			: []),
-		...data.libraries.map((l) => ({
+	const libraryItems = $derived<NavItem[]>(
+		data.libraries.map((l) => ({
 			href: resolve('/(app)/library/[id]', { id: l.id }),
 			label: l.title,
 			icon: (l.type === 'movie' ? 'movie' : 'show') as IconName
 		}))
+	);
+
+	const sidebar = $derived<NavItem[]>([
+		{ href: resolve('/(app)'), label: 'Home', icon: 'home' },
+		...(data.liveTv
+			? [{ href: resolve('/(app)/live'), label: 'Live TV', icon: 'live' as IconName }]
+			: []),
+		...libraryItems
 	]);
+
+	/** Libraries as tabs of their own while they fit; with more, one tab that lists them. */
+	const MAX_LIBRARY_TABS = 3;
 
 	const tabs = $derived<NavItem[]>([
 		{ href: resolve('/(app)'), label: 'Home', icon: 'home' },
-		{ href: resolve('/(app)/search'), label: 'Search', icon: 'search' },
-		{ href: resolve('/(app)/libraries'), label: 'Libraries', icon: 'libraries' },
+		...(libraryItems.length <= MAX_LIBRARY_TABS
+			? libraryItems
+			: [{ href: resolve('/(app)/libraries'), label: 'Libraries', icon: 'libraries' as IconName }]),
 		...(data.liveTv
 			? [{ href: resolve('/(app)/live'), label: 'Live TV', icon: 'live' as IconName }]
 			: []),
@@ -92,6 +99,11 @@
 				<span>Admin</span>
 			</a>
 		{/if}
+		<a
+			href={resolve('/(app)/settings/about')}
+			class="px-3 pt-1 text-xs text-muted hover:text-text"
+			data-testid="sidebar-version">Version {APP_VERSION}</a
+		>
 	</div>
 </nav>
 
@@ -116,7 +128,7 @@
 					class="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs text-muted aria-[current=page]:text-accent"
 				>
 					<Icon name={tab.icon} size={22} />
-					{tab.label}
+					<span class="max-w-full truncate px-1">{tab.label}</span>
 				</a>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			</li>

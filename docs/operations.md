@@ -150,6 +150,8 @@ Use the `.env` (encryption key) that belonged to the backup.
    docker compose ps              # app should become "healthy"
    ```
 
+**Settings → About** shows the version that's running, and what changed in it (from [CHANGELOG.md](../CHANGELOG.md)).
+
 To roll back, check out the previous version, restore the backup taken in step 1, and run `docker compose up -d --build` again.
 
 Caddy renews certificates by itself. To update Caddy, change its image tag in `docker-compose.yml` and run `docker compose up -d`.

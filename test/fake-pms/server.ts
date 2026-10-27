@@ -55,7 +55,7 @@ function initialState() {
 		/** The DVR's single tuner: which grab holds it (a one-tuner DVR, like many IPTV setups). */
 		tuner: null as null | { grabKey: string; channel: string; ratingKey: string },
 		/** Every tune request, for assertions. */
-		tunes: [] as { channel: string; client: string; ok: boolean }[],
+		tunes: [] as { channel: string; client: string; session: string; ok: boolean }[],
 		liveItems: 0,
 		/** HLS transcode sessions started (and stopped) by the app. */
 		transcodes: new Map<
@@ -1006,11 +1006,13 @@ export function createFakePms({ fixturesDir = FIXTURES }: FakePmsOptions = {}) {
 				const client = String(
 					req.headers['x-plex-client-identifier'] ?? query['X-Plex-Client-Identifier'] ?? ''
 				);
-				const grabKey = `/media/grabbers/operations/${channel}-${client}`;
-				// Tuning again keeps the client's existing grab (and its subscription alive).
+				const session = String(req.headers['x-plex-session-identifier'] ?? '');
+				// Like PMS: the grab (and its subscription) belongs to the session, else the client.
+				const grabKey = `/media/grabbers/operations/${channel}-${session || client}`;
+				// Tuning again keeps the existing grab.
 				const again = state.tuner?.grabKey === grabKey;
 				const busy = state.tuner !== null && !again;
-				state.tunes.push({ channel, client, ok: !busy });
+				state.tunes.push({ channel, client, session, ok: !busy });
 				const ratingKey = busy
 					? ''
 					: again

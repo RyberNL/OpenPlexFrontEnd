@@ -46,6 +46,7 @@ Browse, play and watch Live TV in any modern browser, behind your own sign-in wi
 - Resume anywhere, quality and audio track switching, chapters and **scrub previews**
 - Subtitles: SRT/VTT, **styled ASS/SSA** (libass) and **PGS** image subtitles
 - **Skip intro/credits**, play queues with shuffle, **Up next** with autoplay
+- **AirPlay** and **Chromecast**, **picture in picture** and lock-screen controls
 - File info explains how a file plays and why it's converted
 
 </td>
@@ -57,7 +58,7 @@ Browse, play and watch Live TV in any modern browser, behind your own sign-in wi
 
 - Channel list with what's on now and **per-user favorites**
 - A scrollable **program guide** and a **What's On** overview
-- Watch with pause, a "behind live" indicator, **Go live** and channel up/down
+- Watch with pause, a "behind live" indicator, **Go live** and channel up/down, or cast a channel to the TV
 - Tuners are released as soon as you stop watching
 
 </td>
@@ -159,11 +160,11 @@ Behind your own proxy, add a site that forwards to the app; there's a ready-made
 
 ## 📖 Using it
 
-| Guide                                       | What's in it                                                                            |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [Player](docs/player.md)                    | Keyboard shortcuts, touch gestures, subtitles, skipping, autoplay and queues, file info |
-| [Signing in and security](docs/security.md) | Passkeys, authenticator apps, recovery codes, account recovery, what admins can see     |
-| [Operations](docs/operations.md)            | Configuration, reverse proxies, backups and restore, upgrades, the admin CLI, fail2ban  |
+| Guide                                       | What's in it                                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [Player](docs/player.md)                    | Shortcuts, gestures, subtitles, skipping, queues, casting and picture in picture, file info |
+| [Signing in and security](docs/security.md) | Passkeys, authenticator apps, recovery codes, account recovery, what admins can see         |
+| [Operations](docs/operations.md)            | Configuration, reverse proxies, backups and restore, upgrades, the admin CLI, fail2ban      |
 
 <details>
 <summary><b>⌨️ Player shortcuts at a glance</b></summary>
@@ -201,6 +202,8 @@ npm run dev
 | `npm run test:e2e:chunked` | End-to-end tests (Playwright, Chromium and WebKit) in memory-friendly chunks |
 | `npm run fake-pms`         | Starts the fake Plex server the tests use                                    |
 | `npm run fixtures:record`  | Records test fixtures from your own Plex server (`PLEX_URL=… PLEX_TOKEN=…`)  |
+
+**Releasing:** raise `version` in `package.json` and add an entry for it at the top of [CHANGELOG.md](CHANGELOG.md); a test checks that they match. The app shows both under **Settings → About**.
 
 The tests run against a fake Plex server that serves responses recorded from a real one. These recordings aren't included, because they contain a personal library: record your own with `npm run fixtures:record`, and expect to adapt assertions that refer to specific titles.
 

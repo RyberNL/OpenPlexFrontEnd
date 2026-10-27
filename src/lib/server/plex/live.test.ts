@@ -171,6 +171,8 @@ describe.skipIf(!live)('live TV on the real DVR', () => {
 		try {
 			console.log('live →', info.method, info.airing?.title ?? '(no guide entry)');
 			expect(playback.live?.grabKey).toMatch(/^\/media\/grabbers\/operations\//);
+			// The tuner belongs to the playback's session, which its timeline reports keep alive.
+			expect(playback.live?.grabKey).toMatch(new RegExp(`-${playback.plexSession}$`));
 			const { query, headers } = hlsRequest(playback);
 			const master = await plex.fetch(`${TRANSCODE_BASE}start.m3u8`, {
 				query,

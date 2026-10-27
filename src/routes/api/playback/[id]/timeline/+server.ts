@@ -1,11 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { plexForPlayback, requirePlayback } from '#lib/server/playback/relay.js';
-import {
-	endPlayback,
-	renewTuner,
-	reportTimeline,
-	timelineSchema
-} from '#lib/server/playback/timeline.js';
+import { endPlayback, reportTimeline, timelineSchema } from '#lib/server/playback/timeline.js';
 import type { RequestHandler } from './$types';
 
 /** Progress reports from the player (also sent with navigator.sendBeacon on page close). */
@@ -15,12 +10,6 @@ export const POST: RequestHandler = async (event) => {
 	if (!parsed.success) error(400, 'Invalid timeline report');
 	const plex = plexForPlayback(event);
 	if (parsed.data.state === 'stopped') await endPlayback(plex, playback, parsed.data.time);
-	else {
-		await Promise.all([
-			reportTimeline(plex, playback, parsed.data),
-			// A failed renewal shows up as the stream ending, which the player reports itself.
-			renewTuner(plex, playback).catch(() => {})
-		]);
-	}
+	else await reportTimeline(plex, playback, parsed.data);
 	return new Response(null, { status: 204 });
 };

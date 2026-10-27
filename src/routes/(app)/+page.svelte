@@ -1,6 +1,7 @@
 <script lang="ts">
 	import FeaturedHero from '#lib/components/FeaturedHero.svelte';
 	import HubRow from '#lib/components/HubRow.svelte';
+	import SearchBar from '#lib/components/SearchBar.svelte';
 	import { watchHref } from '#lib/media.js';
 	import type { PageProps } from './$types';
 
@@ -16,6 +17,7 @@
 </svelte:head>
 
 <h1 class="sr-only">Home</h1>
+<SearchBar />
 {#if d.featured}
 	<FeaturedHero item={d.featured} />
 {/if}

@@ -35,6 +35,20 @@ test('the Discover home shows continue watching, next up and recently added', as
 	await expect(page.getByRole('region', { name: 'Oh, The Horror!' })).toBeVisible();
 });
 
+test('a row mixing shows and episodes shows every card as a poster of the same height', async ({
+	page
+}) => {
+	await page.goto('/');
+	const row = page.getByRole('list', { name: 'Recently Added TV' });
+	const cards = row.getByTestId('poster-card');
+	await expect(cards.first()).toBeVisible();
+	const heights = await cards.evaluateAll((els) =>
+		els.map((el) => Math.round(el.firstElementChild!.getBoundingClientRect().height))
+	);
+	expect(heights.length).toBeGreaterThan(1);
+	expect(new Set(heights).size, `card heights: ${heights.join(', ')}`).toBe(1);
+});
+
 test('selecting a Continue Watching item resumes playback', async ({ page }) => {
 	await page.goto('/');
 	await page.getByRole('list', { name: 'Continue Watching' }).getByRole('link').first().click();

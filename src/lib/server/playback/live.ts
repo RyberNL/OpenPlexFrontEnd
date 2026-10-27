@@ -84,12 +84,19 @@ export async function startLive(
 		deviceName: describeUserAgent(userAgent),
 		platform: 'Web'
 	};
-	const tunePath = `/livetv/dvrs/${plexId(dvr.dvrId)}/channels/${encodeURIComponent(channel.id)}/tune`;
-	const tuned = await plex.json(tunePath, tuneSchema, {
-		method: 'POST',
-		identity: device,
-		query: { autoPreview: 0 }
-	});
+	const plexSession = newPlexSessionId();
+	// PMS ties the tuner subscription to the session identifier and ends it as idle unless timeline
+	// reports come in under that same identifier, as they do for this playback (see reportTimeline).
+	const tuned = await plex.json(
+		`/livetv/dvrs/${plexId(dvr.dvrId)}/channels/${encodeURIComponent(channel.id)}/tune`,
+		tuneSchema,
+		{
+			method: 'POST',
+			identity: device,
+			headers: { 'X-Plex-Session-Identifier': plexSession },
+			query: { autoPreview: 0 }
+		}
+	);
 	const grab = tuned.MediaContainer.MediaSubscription?.[0]?.MediaGrabOperation?.[0];
 	if (!grab) throw new UnavailableError('The channel could not be tuned');
 	const release = () =>
@@ -100,7 +107,6 @@ export async function startLive(
 	}
 
 	const quality = request.quality as Quality;
-	const plexSession = newPlexSessionId();
 	const streamRequest = {
 		ratingKey: grab.Metadata.ratingKey,
 		mediaIndex: 0,
@@ -142,8 +148,7 @@ export async function startLive(
 			channelId: channel.id,
 			grabKey: grab.key,
 			sessionKey: grab.Metadata.key,
-			tunePath,
-			tunedAt: Date.now()
+			reportedAt: Date.now()
 		}
 	});
 	const now = Date.now();

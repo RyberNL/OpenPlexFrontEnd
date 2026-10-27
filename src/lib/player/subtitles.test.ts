@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeCues, parseAss, parseSrtOrVtt, parseSubtitles } from './subtitles';
+import { activeCues, parseAss, parseSrtOrVtt, parseSubtitles, settledPart } from './subtitles';
 
 const SRT = `1
 00:00:35,118 --> 00:00:36,201
@@ -61,6 +61,22 @@ describe('subtitle parsing', () => {
 	it('detects the format automatically', () => {
 		expect(parseSubtitles(PMS_ASS)).toHaveLength(2);
 		expect(parseSubtitles(SRT)).toHaveLength(2);
+	});
+
+	it('keeps only whole cues of a subtitle that is still arriving', () => {
+		// Cut mid-text, as PMS's progressive output and the network can split it.
+		const ass = PMS_ASS.replace('Dialogue: 0,0:08:02.45', '').replace('someone, finally\n', 'some');
+		expect(parseSubtitles(settledPart(ass))).toEqual([
+			{ start: 4.58, end: 5.58, text: 'I found it.' }
+		]);
+		expect(parseSubtitles(settledPart(PMS_ASS))).toHaveLength(2);
+
+		const srt = SRT.replace('Tweede regel\n', 'Twee');
+		expect(parseSubtitles(settledPart(srt))).toEqual([
+			{ start: 35.118, end: 36.201, text: 'Kom op.' }
+		]);
+		expect(settledPart('1\n00:00:35,118 --> 00:00:36,201\nKom')).toBe('');
+		expect(parseSubtitles(settledPart(SRT.replace(/\n/g, '\r\n') + '\r\n'))).toHaveLength(2);
 	});
 
 	it('finds the cues on screen at a time', () => {

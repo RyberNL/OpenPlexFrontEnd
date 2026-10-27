@@ -11,6 +11,14 @@ export type StreamInfo = {
 };
 
 /**
+ * Safari: AirPlay can hand a stream to the TV only when the browser plays it itself from a URL,
+ * not through hls.js (Media Source), so HLS plays natively there.
+ */
+export function prefersNativeHls() {
+	return typeof window !== 'undefined' && 'WebKitPlaybackTargetAvailabilityEvent' in window;
+}
+
+/**
  * Attaches a stream to a <video> element: direct file, hls.js (MSE) or native HLS (Safari).
  * Returns a detach function.
  */
@@ -21,18 +29,10 @@ export async function attachStream(
 ): Promise<() => void> {
 	const startSeconds = Math.max(0, (stream.startAt - stream.streamOffset) / 1000);
 
-	if (stream.kind === 'file') {
-		video.src = stream.src;
-		const seek = () => {
-			if (startSeconds) video.currentTime = startSeconds;
-		};
-		video.addEventListener('loadedmetadata', seek, { once: true });
-		return () => {
-			video.removeEventListener('loadedmetadata', seek);
-			video.removeAttribute('src');
-			video.load();
-		};
-	}
+	if (stream.kind === 'file') return attachNative(video, stream.src, startSeconds, onFatal);
+
+	const native = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+	if (native && prefersNativeHls()) return attachNative(video, stream.src, startSeconds, onFatal);
 
 	const { default: HlsClass } = await import('hls.js');
 	if (HlsClass.isSupported()) {
@@ -69,21 +69,38 @@ export async function attachStream(
 		};
 	}
 
-	if (video.canPlayType('application/vnd.apple.mpegurl')) {
-		video.src = stream.src;
-		const seek = () => {
-			if (startSeconds) video.currentTime = startSeconds;
-		};
-		video.addEventListener('loadedmetadata', seek, { once: true });
-		return () => {
-			video.removeEventListener('loadedmetadata', seek);
-			video.removeAttribute('src');
-			video.load();
-		};
-	}
+	if (native) return attachNative(video, stream.src, startSeconds, onFatal);
 
 	onFatal('This browser cannot play video streams.');
 	return () => {};
+}
+
+/** Plays a file or HLS stream with the browser's own player. */
+function attachNative(
+	video: HTMLVideoElement,
+	src: string,
+	startSeconds: number,
+	onFatal: (message: string) => void
+) {
+	video.src = src;
+	const seek = () => {
+		if (startSeconds) video.currentTime = startSeconds;
+	};
+	const fail = () => {
+		onFatal(
+			video.error?.code === MediaError.MEDIA_ERR_NETWORK
+				? 'The stream was interrupted.'
+				: 'The stream could not be played.'
+		);
+	};
+	video.addEventListener('loadedmetadata', seek, { once: true });
+	video.addEventListener('error', fail);
+	return () => {
+		video.removeEventListener('loadedmetadata', seek);
+		video.removeEventListener('error', fail);
+		video.removeAttribute('src');
+		video.load();
+	};
 }
 
 const LOAD_POLICY = {

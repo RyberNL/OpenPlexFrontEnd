@@ -183,6 +183,7 @@ export function toMediaItem(raw: RawMetadata): MediaItem {
 		summary: raw.summary || undefined,
 		tagline: raw.tagline || undefined,
 		thumb: raw.thumb ?? raw.composite,
+		poster: raw.type === 'episode' ? (raw.grandparentThumb ?? raw.parentThumb) : undefined,
 		art: raw.art,
 		duration: raw.duration,
 		viewOffset: raw.viewOffset,

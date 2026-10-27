@@ -2,6 +2,7 @@ import { expect, test } from './support/test';
 import { fakePms } from './support/fake-pms';
 import { signInAs } from './support/auth';
 import { mapToPlexOwner, seedUser } from './support/db';
+import { castLoads, fakeChromecast } from './support/cast';
 import { currentTime, seekVideo, video, waitUntilPlaying } from './support/player';
 
 test.afterEach(() => fakePms('clear-patches'));
@@ -84,4 +85,52 @@ test('the back button returns to the previous page', async ({ page }) => {
 	await expect(page).toHaveURL('/watch/157?from=start');
 	await page.getByRole('button', { name: 'Back', exact: true }).click();
 	await expect(page).toHaveURL('/item/157');
+});
+
+test('casting to a Chromecast continues there, and stopping continues here', async ({
+	page,
+	playwright
+}) => {
+	test.skip(!test.info().project.name.startsWith('chromium'), 'Chromecast is Chrome-only');
+	await fakeChromecast(page);
+	await page.goto('/watch/157?from=start');
+	await waitUntilPlaying(page);
+	await seekVideo(page, 20);
+
+	await page.getByRole('button', { name: 'Cast' }).click();
+	await expect(page.getByTestId('casting')).toHaveText('Playing on Living Room TV');
+	await expect.poll(async () => (await castLoads(page)).length).toBe(1);
+	const [load] = await castLoads(page);
+	expect(load).toMatchObject({
+		contentType: 'video/mp4',
+		streamType: 'BUFFERED',
+		title: '12 Strong'
+	});
+	expect(load.url).toMatch(/^http:\/\/localhost:\d+\/stream\/cast_[\w-]+\/file$/);
+	expect(load.currentTime).toBeGreaterThanOrEqual(19);
+
+	// The TV fetches the stream itself, without the session cookie.
+	const tv = await playwright.request.newContext();
+	expect((await tv.get(load.url, { headers: { Range: 'bytes=0-99' } })).status()).toBe(206);
+	await tv.dispose();
+
+	await page.getByRole('button', { name: 'Stop casting' }).click();
+	await expect(page.getByTestId('casting')).toBeHidden();
+	await waitUntilPlaying(page);
+	expect(await currentTime(page)).toBeGreaterThanOrEqual(19);
+});
+
+test('when picture in picture silently fails (an iPhone Home Screen app), the player says why', async ({
+	page
+}) => {
+	await page.addInitScript(() => {
+		Object.defineProperty(navigator, 'standalone', { value: true });
+		Object.defineProperty(document, 'pictureInPictureEnabled', { value: true });
+		HTMLVideoElement.prototype.requestPictureInPicture = () =>
+			Promise.resolve({} as PictureInPictureWindow);
+	});
+	await page.goto('/watch/157?from=start');
+	await waitUntilPlaying(page);
+	await page.getByRole('button', { name: 'Picture in picture' }).click();
+	await expect(page.getByTestId('pip-notice')).toContainText('Open the site in Safari');
 });

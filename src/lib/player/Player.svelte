@@ -8,7 +8,19 @@
 	import { QUALITY_PRESETS, type Quality } from '#lib/playback.js';
 	import type { Prefs } from '#lib/server/prefs.js';
 	import { deviceId } from './device';
-	import { attachStream, SPEEDS, type StreamInfo } from './engine';
+	import { cast } from './cast.svelte';
+	import { attachStream, prefersNativeHls, SPEEDS, type StreamInfo } from './engine';
+	import {
+		allowAutoPip,
+		castSource,
+		clearMediaControls,
+		pipSupported as canPip,
+		setMediaControls,
+		showAirPlayPicker,
+		pipFailureMessage,
+		togglePip,
+		watchAirPlay
+	} from './remote';
 	import AssSubtitles from './AssSubtitles.svelte';
 	import FileInfo from './FileInfo.svelte';
 	import PgsSubtitles from './PgsSubtitles.svelte';
@@ -156,11 +168,49 @@
 		if (!item || item.type !== 'episode') return '';
 		return `S${item.parentIndex} · E${item.index} — ${item.title}`;
 	});
-	const pipSupported = $derived(
-		typeof document !== 'undefined' &&
-			'pictureInPictureEnabled' in document &&
-			document.pictureInPictureEnabled
-	);
+	const pipSupported = canPip();
+	/** Why picture in picture didn't start, shown for a while. */
+	let pipNotice = $state<string | null>(null);
+
+	async function pip() {
+		if (!video || (await togglePip(video))) return;
+		pipNotice = pipFailureMessage();
+		setTimeout(() => (pipNotice = null), 8_000);
+	}
+	/** AirPlay devices around (Safari), and whether the video plays on one. */
+	let airplay = $state({ available: false, active: false });
+	/** This player's video plays on a Chromecast (see startCasting). */
+	let castingHere = $state(false);
+
+	/** What Google's default receiver plays on every Chromecast. */
+	const CAST_CAPS = {
+		containers: ['mp4', 'm4v'],
+		video: ['h264'],
+		audio: ['aac', 'mp3'],
+		hdr: false,
+		nativeHls: false,
+		mse: true
+	};
+
+	$effect(() => {
+		if (!video) return;
+		allowAutoPip(video);
+		return watchAirPlay(video, (state) => (airplay = state));
+	});
+
+	// Lock screen and notification controls, so playback can go on in the background.
+	$effect(() => {
+		if (!info) return;
+		setMediaControls({
+			title,
+			artist: subtitleLine || undefined,
+			artwork: info.item.thumb,
+			play: () => (castingHere ? cast.paused && cast.playOrPause() : void video?.play()),
+			pause: () => (castingHere ? !cast.paused && cast.playOrPause() : video?.pause()),
+			skip,
+			seekTo: (seconds) => seekTo(seconds * 1000 + (info?.streamOffset ?? 0))
+		});
+	});
 
 	let reportTimer: ReturnType<typeof setInterval> | undefined;
 	let ended = false;
@@ -205,6 +255,8 @@
 	/** The page is being unloaded: final report. */
 	function onPageHide() {
 		if (!info || ended) return;
+		// The TV plays on without this page; the server ends the playback once it stops.
+		if (castingHere) return saveProgress();
 		ended = true;
 		send('stopped', true);
 	}
@@ -227,8 +279,9 @@
 				version,
 				offset: options.offset,
 				quality,
-				burnSubtitles,
-				caps: probeCapabilities(),
+				// The default receiver shows no subtitles of its own: they come burned in.
+				burnSubtitles: burnSubtitles || (castingHere && subtitleOn),
+				caps: castingHere ? CAST_CAPS : probeCapabilities(),
 				deviceId: deviceId()
 			})
 		}).catch(() => null);
@@ -239,6 +292,15 @@
 			return;
 		}
 		info = await response.json();
+		if (castingHere) {
+			await castCurrent();
+			return;
+		}
+		if (prefersNativeHls()) {
+			// AirPlay hands the URL to the TV, which fetches the stream without the session cookie.
+			const source = await castSource(info!.playbackId);
+			if (source) info!.src = source.src;
+		}
 		// A fresh <video> per stream: WebKit can get stuck re-attaching MSE to a used element.
 		streamKey++;
 		await tick();
@@ -250,10 +312,72 @@
 		loading = false;
 	}
 
+	/** Picks a Chromecast and continues there, on a stream made for it, from the same position. */
+	async function startCasting() {
+		if (!(await cast.connect())) return;
+		castingHere = true;
+		video?.pause();
+		await start({ offset: Math.round(position) });
+	}
+
+	/** Loads the current playback (started for the Chromecast) on the TV. */
+	async function castCurrent() {
+		const source = info && (await castSource(info.playbackId));
+		try {
+			if (!info || !source) throw new Error('No cast URL');
+			await cast.load({
+				...source,
+				startAt: (info.startAt - info.streamOffset) / 1000,
+				title: title,
+				subtitle: subtitleLine || undefined
+			});
+		} catch {
+			castingHere = false;
+			cast.disconnect();
+			error = 'The video could not be played on the Chromecast.';
+			loading = false;
+			return;
+		}
+		streamTime = cast.time;
+		loading = false;
+		clearInterval(reportTimer);
+		reportTimer = setInterval(() => report(cast.paused ? 'paused' : 'playing'), 10_000);
+	}
+
+	/** Back from the Chromecast: playback continues here where the TV was. */
+	function stopCasting() {
+		cast.disconnect();
+	}
+
+	$effect(() => {
+		if (!castingHere) return;
+		if (cast.device === null) {
+			// The cast session ended (here, from Chrome's menu, or on the TV).
+			castingHere = false;
+			clearInterval(reportTimer);
+			void start({ offset: Math.round(position) });
+			return;
+		}
+		streamTime = cast.time;
+		playing = !cast.paused;
+	});
+
+	$effect(() => {
+		if (!castingHere || !cast.finished) return;
+		clearInterval(reportTimer);
+		void promptNext().finally(() => report('stopped'));
+	});
+
 	/** Seeks to an item time (ms), restarting the stream when it lies before the stream start. */
 	function seekTo(target: number) {
-		if (!info || !video) return;
+		if (!info) return;
 		const clamped = Math.max(0, Math.min(target, duration || target));
+		if (castingHere) {
+			cast.seek((clamped - info.streamOffset) / 1000);
+			streamTime = cast.time;
+			return;
+		}
+		if (!video) return;
 		if (info.kind === 'hls' && clamped < info.streamOffset) {
 			void start({ offset: clamped });
 			return;
@@ -342,6 +466,11 @@
 	}
 
 	function togglePlay() {
+		if (castingHere) {
+			cast.playOrPause();
+			reveal();
+			return;
+		}
 		if (!video) return;
 		if (video.paused) void video.play();
 		else video.pause();
@@ -437,12 +566,6 @@
 		reveal();
 	}
 
-	async function togglePip() {
-		if (!video) return;
-		if (document.pictureInPictureElement) await document.exitPictureInPicture();
-		else await video.requestPictureInPicture().catch(() => {});
-	}
-
 	/** Shows the controls, hiding them again after a while if playing. */
 	function reveal() {
 		controlsVisible = true;
@@ -529,6 +652,7 @@
 	}
 
 	onMount(() => {
+		void cast.init();
 		void start();
 		const onFullscreen = () => (fullscreen = !!document.fullscreenElement);
 		document.addEventListener('fullscreenchange', onFullscreen);
@@ -537,6 +661,8 @@
 
 	onDestroy(() => {
 		clearInterval(reportTimer);
+		if (castingHere) cast.disconnect();
+		clearMediaControls();
 		report('stopped');
 		detach?.();
 		clearTimeout(hideTimer);
@@ -562,6 +688,7 @@
 		<video
 			bind:this={video}
 			class="h-full w-full object-contain"
+			class:invisible={castingHere}
 			playsinline
 			preload="auto"
 			bind:currentTime={streamTime}
@@ -587,12 +714,21 @@
 				// "stopped" ends the playback on the server, so ask what's next first.
 				void promptNext().finally(() => report('stopped'));
 			}}
-			onerror={() => (error = 'The stream could not be played.')}
 			data-testid="video"
 		></video>
 	{/key}
 
-	{#if info?.subtitle}
+	{#if castingHere || airplay.active}
+		<div
+			class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center"
+			data-testid="casting"
+		>
+			<Icon name={castingHere ? 'cast' : 'airplay'} size={48} class="text-white/70" />
+			<p class="text-lg font-semibold">Playing on {castingHere ? cast.device : 'AirPlay'}</p>
+		</div>
+	{/if}
+
+	{#if info?.subtitle && !castingHere}
 		{#if info.subtitle.codec === 'pgs' && video}
 			{#key video}
 				<PgsSubtitles
@@ -664,6 +800,16 @@
 		</div>
 	{/if}
 
+	{#if pipNotice}
+		<p
+			class="absolute top-24 left-1/2 z-20 w-max max-w-[90%] -translate-x-1/2 rounded-lg bg-black/85 px-4 py-2 text-center text-sm"
+			role="status"
+			data-testid="pip-notice"
+		>
+			{pipNotice}
+		</p>
+	{/if}
+
 	{#if error}
 		<div class="absolute inset-0 flex items-center justify-center bg-black/80 p-6" role="alert">
 			<div class="flex max-w-md flex-col items-center gap-4 text-center">
@@ -685,7 +831,7 @@
 		data-visible={controlsVisible}
 	>
 		<div
-			class="pointer-events-auto flex items-center gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 md:p-5"
+			class="player-bar-top pointer-events-auto flex items-center gap-3 bg-gradient-to-b from-black/80 to-transparent"
 		>
 			<button class="ctl" aria-label="Back" onclick={onBack}><Icon name="back" /></button>
 			<div class="min-w-0">
@@ -703,7 +849,7 @@
 		</div>
 
 		<div
-			class="pointer-events-auto flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent p-3 pt-10 md:p-5"
+			class="player-bar-bottom pointer-events-auto flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent"
 		>
 			<div class="flex items-center gap-3 text-sm tabular-nums">
 				<span data-testid="elapsed">{formatTimestamp(position)}</span>
@@ -984,8 +1130,27 @@
 						</ul>
 					{/if}
 				</div>
-				{#if pipSupported}
-					<button class="ctl" aria-label="Picture in picture" onclick={togglePip}>⧉</button>
+				{#if airplay.available && !castingHere}
+					<button
+						class="ctl"
+						aria-label="AirPlay"
+						onclick={() => video && showAirPlayPicker(video)}
+						data-testid="airplay"><Icon name="airplay" /></button
+					>
+				{/if}
+				{#if cast.available || castingHere}
+					<button
+						class="ctl"
+						class:text-accent={castingHere}
+						aria-label={castingHere ? 'Stop casting' : 'Cast'}
+						onclick={() => (castingHere ? stopCasting() : void startCasting())}
+						data-testid="cast"><Icon name="cast" /></button
+					>
+				{/if}
+				{#if pipSupported && !castingHere}
+					<button class="ctl" aria-label="Picture in picture" onclick={pip}
+						><Icon name="pip" /></button
+					>
 				{/if}
 				<button
 					class="ctl"
@@ -999,7 +1164,7 @@
 	<!-- Skip and up-next prompts stay clickable while the controls are hidden. -->
 	<div
 		class="absolute right-4 flex flex-col items-end gap-3 transition-[bottom] duration-200 md:right-8"
-		style:bottom={controlsVisible ? '7.5rem' : '2rem'}
+		style:bottom="calc({controlsVisible ? '7.5rem' : '2rem'} + env(safe-area-inset-bottom))"
 	>
 		{#if skipNotice}
 			<div

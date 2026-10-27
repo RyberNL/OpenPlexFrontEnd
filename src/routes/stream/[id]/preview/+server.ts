@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { PlexNotFoundError } from '#lib/server/plex/errors.js';
 import { BifError, frameIndexAt, parseBif } from '#lib/server/playback/bif.js';
-import { plexForPlayback, requirePlayback } from '#lib/server/playback/relay.js';
+import { plexOfPlayback, requireStreamPlayback } from '#lib/server/playback/relay.js';
 import type { RequestHandler } from './$types';
 
 /** Larger index files are not kept in memory (a feature film's is a few MB). */
@@ -12,11 +12,11 @@ const MAX_BIF_BYTES = 64 * 1024 * 1024;
  * thumbnails as one BIF file; it is fetched once per playback and kept with the session.
  */
 export const GET: RequestHandler = async (event) => {
-	const playback = requirePlayback(event);
+	const playback = requireStreamPlayback(event);
 	const time = Number(event.url.searchParams.get('t'));
 	if (!Number.isFinite(time) || time < 0) error(400, 'Invalid time');
 
-	playback.previews ??= plexForPlayback(event)
+	playback.previews ??= plexOfPlayback(playback)
 		.fetch(`/library/parts/${playback.partId}/indexes/sd`, {
 			identity: playback.device,
 			headers: { Accept: '*/*' },

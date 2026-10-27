@@ -12,8 +12,17 @@
 
 	const href = $derived(hrefOverride ?? itemHref(item));
 
+	const episodeLike = $derived(item.type === 'episode' || item.type === 'clip');
+	// Wide cards use an episode's still, else the item's background art; poster cards use posters,
+	// the show's for an episode, so a row of mixed items lines up.
 	const image = $derived(
-		landscape && item.type !== 'episode' && item.type !== 'clip' && item.art ? item.art : item.thumb
+		landscape
+			? !episodeLike && item.art
+				? item.art
+				: item.thumb
+			: item.type === 'episode'
+				? (item.poster ?? item.thumb)
+				: item.thumb
 	);
 	const fraction = $derived(progress(item));
 	const unwatched = $derived(unwatchedCount(item));

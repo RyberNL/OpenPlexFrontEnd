@@ -73,7 +73,18 @@ Notes:
 
 The quality menu changes the target quality; playback continues from the same position. The server allows one video transcode at a time.
 
+## Casting, picture-in-picture and background playback
+
+- **AirPlay** (Safari on iPhone, iPad and Mac): the AirPlay button appears when an AirPlay device is nearby. The video continues on the TV, and the player's controls keep working.
+- **Chromecast** (Chrome on a computer or Android): the Cast button appears when a Chromecast is on the network. The video continues on the TV from the same position, in a format every Chromecast plays (subtitles are burned in). **Stop casting** brings it back to the browser where the TV was. Live TV channels can be cast too; they keep the tuner they already have.
+- **Picture in picture** keeps the video playing in a small floating window while you use other apps or tabs. Where the browser supports it, leaving the page while a video plays switches to picture in picture by itself.
+- The lock screen, notification area and headset buttons show what's playing and can pause, resume and skip.
+
+A cast device fetches the video itself and can't sign in. It gets a link with a long random secret that opens only that one stream, and only while it plays. The link stops working when playback ends.
+
 ## Known limitations
 
 - Fonts that are only stored as MKV attachments aren't used for ASS subtitles (see above).
 - Embedded image subtitles can't be drawn by the browser, so they're always burned in.
+- Subtitles drawn by the browser (text, ASS and PGS files) don't appear on an AirPlay device.
+- Firefox can't cast; use picture in picture or the browser's own screen sharing instead.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchBar from '#lib/components/SearchBar.svelte';
 	import { resolve } from '$app/paths';
 	import { page as appPage } from '$app/state';
 	import VirtualGrid from '#lib/components/VirtualGrid.svelte';
@@ -39,6 +40,7 @@
 	<title>{lib.title} · OpenPlexFrontEnd</title>
 </svelte:head>
 
+<SearchBar />
 <div class="px-4 py-6 md:px-8">
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<a

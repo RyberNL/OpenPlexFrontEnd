@@ -58,7 +58,7 @@ export async function fakeTranscodes(): Promise<
 /** Who holds the fake DVR's single tuner, and every tune request so far. */
 export async function fakeTuner(): Promise<{
 	tuner: { grabKey: string; channel: string; ratingKey: string } | null;
-	tunes: { channel: string; client: string; ok: boolean }[];
+	tunes: { channel: string; client: string; session: string; ok: boolean }[];
 }> {
 	return (await fetch(`${FAKE_PMS_URL}/__fake/tuner`)).json();
 }

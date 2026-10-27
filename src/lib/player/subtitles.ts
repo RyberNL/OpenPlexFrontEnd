@@ -86,11 +86,23 @@ export function parseAss(text: string): Cue[] {
 	return cues;
 }
 
+const isAss = (text: string) => /^\s*\[Script Info\]/i.test(text) || /\n\[Events\]/i.test(text);
+
 /** Detects the format from the content and parses it. */
 export function parseSubtitles(text: string): Cue[] {
-	return /^\s*\[Script Info\]/i.test(text) || /\n\[Events\]/i.test(text)
-		? parseAss(text)
-		: parseSrtOrVtt(text);
+	return isAss(text) ? parseAss(text) : parseSrtOrVtt(text);
+}
+
+/**
+ * The part of a subtitle that is still arriving which can't change any more: up to the last line
+ * break for ASS (one event per line), up to the last blank line for SRT and WebVTT (one cue per
+ * block). A cue cut off mid-text would otherwise be shown, and kept, beside the complete one.
+ */
+export function settledPart(text: string) {
+	const normalized = text.replace(/\r/g, '');
+	if (isAss(normalized)) return normalized.slice(0, normalized.lastIndexOf('\n') + 1);
+	const blank = normalized.lastIndexOf('\n\n');
+	return blank < 0 ? '' : normalized.slice(0, blank + 2);
 }
 
 /** Cues showing at `time` (seconds). */

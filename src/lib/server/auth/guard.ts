@@ -37,6 +37,14 @@ function matches(pathname: string, prefix: string) {
 	return pathname === prefix || pathname.startsWith(prefix + '/');
 }
 
+/**
+ * A stream fetched by a cast device (AirPlay, Chromecast) with a playback's cast id instead of the
+ * session cookie; the stream routes check the id.
+ */
+export function isCastStreamPath(pathname: string) {
+	return pathname.startsWith('/stream/cast_');
+}
+
 export function isApiPath(pathname: string) {
 	return matches(pathname, '/api') || matches(pathname, '/img') || matches(pathname, '/stream');
 }
@@ -55,6 +63,7 @@ export type GuardDecision =
 
 /** Decides whether a request may proceed based on the path and the caller's session. */
 export function guard({ pathname, search, session, role }: GuardInput): GuardDecision {
+	if (isCastStreamPath(pathname)) return { action: 'allow' };
 	const rule = RULES.find((r) => matches(pathname, r.prefix));
 	const api = isApiPath(pathname);
 

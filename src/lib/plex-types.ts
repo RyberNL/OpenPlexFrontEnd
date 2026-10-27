@@ -73,6 +73,8 @@ export type MediaItem = {
 	summary?: string;
 	tagline?: string;
 	thumb?: string;
+	/** Episodes: the show's poster, for places that show every item as a poster. */
+	poster?: string;
 	art?: string;
 	duration?: number;
 	viewOffset?: number;

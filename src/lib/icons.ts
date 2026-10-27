@@ -11,7 +11,10 @@ export const ICON_PATHS = {
 	back: 'M15 18l-6-6 6-6',
 	play: 'M7 4v16l13-8z',
 	check: 'M5 12l5 5L20 7',
-	close: 'M6 6l12 12M18 6 6 18'
+	close: 'M6 6l12 12M18 6 6 18',
+	cast: 'M3 7V5h18v14h-7M3 11a8 8 0 0 1 8 8M3 15a4 4 0 0 1 4 4M3 19h.01',
+	airplay: 'M6 17H3V4h18v13h-3M12 14l5 7H7z',
+	pip: 'M3 5h18v14H3zM12 11h7v6h-7z'
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

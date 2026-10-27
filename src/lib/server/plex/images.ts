@@ -65,6 +65,7 @@ export function presentItem(item: MediaItem): MediaItem {
 	return {
 		...item,
 		thumb: imageUrl(item.thumb, episodeLike ? 'thumb' : 'poster', episodeLike ? 480 : 360),
+		poster: imageUrl(item.poster, 'poster', 360),
 		art: imageUrl(item.art, 'art', 1280),
 		directors: item.directors.map(person),
 		writers: item.writers.map(person),

@@ -5,7 +5,19 @@
 	import type { Quality } from '#lib/playback.js';
 	import type { Airing, LiveChannel } from '#lib/plex-types.js';
 	import { deviceId } from './device';
-	import { attachStream } from './engine';
+	import { cast } from './cast.svelte';
+	import { attachStream, prefersNativeHls } from './engine';
+	import {
+		allowAutoPip,
+		castSource,
+		clearMediaControls,
+		pipSupported as canPip,
+		setMediaControls,
+		showAirPlayPicker,
+		pipFailureMessage,
+		togglePip,
+		watchAirPlay
+	} from './remote';
 
 	type LiveInfo = {
 		playbackId: string;
@@ -63,6 +75,22 @@
 	let clockTimer: ReturnType<typeof setInterval> | undefined;
 	let bufferTimer: ReturnType<typeof setInterval> | undefined;
 	let hideTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Set while switching channels: casting carries on with the next channel. */
+	let switching = false;
+
+	const pipSupported = canPip();
+	/** Why picture in picture didn't start, shown for a while. */
+	let pipNotice = $state<string | null>(null);
+
+	async function pip() {
+		if (!video || (await togglePip(video))) return;
+		pipNotice = pipFailureMessage();
+		setTimeout(() => (pipNotice = null), 8_000);
+	}
+	/** AirPlay devices around (Safari), and whether the video plays on one. */
+	let airplay = $state({ available: false, active: false });
+	/** The channel plays on a Chromecast; the local video is detached meanwhile. */
+	let castingHere = $state(false);
 
 	const current = $derived(channels.find((c) => c.id === channel));
 	const index = $derived(channels.findIndex((c) => c.id === channel));
@@ -98,18 +126,89 @@
 		}
 		info = await response.json();
 		released = false;
+		clearInterval(reportTimer);
+		reportTimer = setInterval(() => report(video?.paused ? 'paused' : 'playing'), 10_000);
+		// Still casting from the previous channel: this one goes to the TV too.
+		if (cast.device !== null) {
+			await castChannel();
+			return;
+		}
+		if (prefersNativeHls()) {
+			// AirPlay hands the URL to the TV, which fetches the stream without the session cookie.
+			const source = await castSource(info!.playbackId);
+			if (source) info!.src = source.src;
+		}
+		await playHere();
+	}
+
+	async function playHere() {
 		await tick();
 		detach = await attachStream(video!, info!, (message) => {
 			error = { message, busy: false };
-			// A dead stream must not keep reporting (which keeps renewing the tuner) or hold the tuner.
+			// A dead stream must not keep reporting (which keeps the tuner) or hold the tuner.
 			releasing = release();
 		});
 		await video!.play().catch(() => {
 			// Autoplay may be blocked; the play button remains available.
 		});
 		loading = false;
-		reportTimer = setInterval(() => report(video?.paused ? 'paused' : 'playing'), 10_000);
 	}
+
+	/** Picks a Chromecast and moves the channel there; the tuner stays with this playback. */
+	async function startCasting() {
+		if (!(await cast.connect())) return;
+		await castChannel();
+	}
+
+	async function castChannel() {
+		if (!info) return;
+		loading = true;
+		detach?.();
+		detach = undefined;
+		const source = await castSource(info.playbackId);
+		try {
+			if (!source) throw new Error('No cast URL');
+			await cast.load({
+				...source,
+				live: true,
+				title: current?.title ?? 'Live TV',
+				subtitle: airing?.title
+			});
+			castingHere = true;
+		} catch {
+			cast.disconnect();
+			await playHere();
+			error = { message: 'The channel could not be played on the Chromecast.', busy: false };
+			return;
+		}
+		loading = false;
+	}
+
+	$effect(() => {
+		// The cast session ended (here, from Chrome's menu, or on the TV): watch here again.
+		if (castingHere && cast.device === null) {
+			castingHere = false;
+			loading = true;
+			void playHere();
+		}
+	});
+
+	$effect(() => {
+		if (!video) return;
+		allowAutoPip(video);
+		return watchAirPlay(video, (state) => (airplay = state));
+	});
+
+	// Lock screen and notification controls, so the channel can play on in the background.
+	$effect(() => {
+		if (!current) return;
+		setMediaControls({
+			title: airing?.title ?? current.title,
+			artist: `${current.number} ${current.title}`,
+			play: () => (castingHere ? cast.paused && cast.playOrPause() : void video?.play()),
+			pause: () => (castingHere ? !cast.paused && cast.playOrPause() : video?.pause())
+		});
+	});
 
 	/** Keeps the playback alive on the server (and visible in the Plex dashboard). */
 	function report(state: 'playing' | 'paused' | 'stopped', keepalive = false) {
@@ -137,7 +236,8 @@
 	 * outlives the page. The server then ends the playback, which frees the tuner.
 	 */
 	function releaseOnUnload() {
-		if (!info || released) return;
+		// The TV plays on; the server ends the playback (and frees the tuner) once it stops.
+		if (!info || released || castingHere) return;
 		report('stopped', true);
 		released = true;
 	}
@@ -146,6 +246,7 @@
 		picker = false;
 		if (id === channel) return;
 		loading = true;
+		switching = true;
 		await release();
 		onSwitch(id);
 	}
@@ -178,6 +279,11 @@
 	}
 
 	function togglePlay() {
+		if (castingHere) {
+			cast.playOrPause();
+			reveal();
+			return;
+		}
 		if (!video) return;
 		if (video.paused) void video.play();
 		else video.pause();
@@ -222,6 +328,7 @@
 	}
 
 	onMount(() => {
+		void cast.init();
 		void tune();
 		clockTimer = setInterval(() => (now = Date.now()), 30_000);
 		// The live edge moves on while paused, when the video fires no time updates.
@@ -233,6 +340,8 @@
 		clearInterval(clockTimer);
 		clearInterval(bufferTimer);
 		clearTimeout(hideTimer);
+		if (castingHere && !switching) cast.disconnect();
+		clearMediaControls();
 		void release();
 	});
 </script>
@@ -249,6 +358,7 @@
 	<video
 		bind:this={video}
 		class="h-full w-full object-contain"
+		class:invisible={castingHere}
 		playsinline
 		bind:muted
 		onplay={() => ((playing = true), report('playing'))}
@@ -260,6 +370,16 @@
 		data-testid="video"
 	></video>
 
+	{#if (castingHere || airplay.active) && !loading}
+		<div
+			class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center"
+			data-testid="casting"
+		>
+			<Icon name={castingHere ? 'cast' : 'airplay'} size={48} class="text-white/70" />
+			<p class="text-lg font-semibold">Playing on {castingHere ? cast.device : 'AirPlay'}</p>
+		</div>
+	{/if}
+
 	{#if loading && !error}
 		<div
 			class="pointer-events-none absolute inset-0 flex items-center justify-center"
@@ -269,6 +389,16 @@
 			></span>
 			<span class="sr-only">Tuning</span>
 		</div>
+	{/if}
+
+	{#if pipNotice}
+		<p
+			class="absolute top-24 left-1/2 z-20 w-max max-w-[90%] -translate-x-1/2 rounded-lg bg-black/85 px-4 py-2 text-center text-sm"
+			role="status"
+			data-testid="pip-notice"
+		>
+			{pipNotice}
+		</p>
 	{/if}
 
 	{#if error}
@@ -294,7 +424,7 @@
 		data-testid="controls"
 	>
 		<div
-			class="pointer-events-auto flex items-center gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 md:p-5"
+			class="player-bar-top pointer-events-auto flex items-center gap-3 bg-gradient-to-b from-black/80 to-transparent"
 		>
 			<button class="ctl" aria-label="Back" onclick={onBack}><Icon name="back" /></button>
 			<div class="min-w-0 flex-1">
@@ -313,7 +443,7 @@
 
 		{#if info && !error}
 			<div
-				class="pointer-events-auto flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent p-3 pt-10 md:p-5"
+				class="player-bar-bottom pointer-events-auto flex flex-col gap-2 bg-gradient-to-t from-black/90 to-transparent"
 			>
 				<div class="flex items-center gap-3 text-sm tabular-nums">
 					<input
@@ -356,8 +486,31 @@
 						aria-label={muted ? 'Unmute' : 'Mute'}
 						onclick={() => (muted = !muted)}>{muted ? '🔇' : '🔊'}</button
 					>
+					<span class="flex-1"></span>
+					{#if airplay.available && !castingHere}
+						<button
+							class="ctl"
+							aria-label="AirPlay"
+							onclick={() => video && showAirPlayPicker(video)}
+							data-testid="airplay"><Icon name="airplay" /></button
+						>
+					{/if}
+					{#if cast.available || castingHere}
+						<button
+							class="ctl"
+							class:text-accent={castingHere}
+							aria-label={castingHere ? 'Stop casting' : 'Cast'}
+							onclick={() => (castingHere ? cast.disconnect() : void startCasting())}
+							data-testid="cast"><Icon name="cast" /></button
+						>
+					{/if}
+					{#if pipSupported && !castingHere}
+						<button class="ctl" aria-label="Picture in picture" onclick={pip}
+							><Icon name="pip" /></button
+						>
+					{/if}
 					<button
-						class="ctl ml-auto px-3 text-sm"
+						class="ctl px-3 text-sm"
 						aria-label="Channels"
 						aria-expanded={picker}
 						onclick={() => ((picker = !picker), reveal())}>Channels</button

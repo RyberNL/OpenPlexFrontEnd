@@ -6,9 +6,9 @@ import { plexFor } from '../plex/session';
 import { insertUser, testDb } from '../test-utils';
 import { allPlaybacks, createPlayback } from './sessions';
 import {
-	renewTuner,
+	keepLiveAlive,
+	LIVE_REPORT_EVERY,
 	reportTimeline,
-	RETUNE_AFTER,
 	STALE_AFTER,
 	sweepStalePlaybacks,
 	watchedThreshold
@@ -85,42 +85,37 @@ describe('timeline reporting', () => {
 	});
 });
 
-describe('live tuner renewal', () => {
-	it('tunes the channel again once a minute, keeping the grab', async () => {
+describe('keeping a live tuner', () => {
+	it('reports a live playback that went unreported for a while, under its own session', async () => {
 		const plex = plexFor(db, db.select().from(users).all()[0]);
 		const start = Date.now();
 		const p = createPlayback({
 			...playback('transcode'),
 			live: {
 				channelId: '1000',
-				grabKey: '/media/grabbers/operations/1000-plex-web-device',
+				grabKey: '/media/grabbers/operations/1000-sess',
 				sessionKey: '/livetv/sessions/live-1',
-				tunePath: '/livetv/dvrs/1/channels/1000/tune',
-				tunedAt: start
+				reportedAt: start
 			}
 		});
-		const tunes = () => pms.state.tunes.length;
-		const before = tunes();
+		const reports = () => pms.state.timelines.filter((t) => t.session === p.plexSession);
 
-		await renewTuner(plex, p, start + RETUNE_AFTER - 1);
-		expect(tunes()).toBe(before);
+		await keepLiveAlive(plex, p, start + LIVE_REPORT_EVERY - 1);
+		expect(reports()).toHaveLength(0);
 
-		await renewTuner(plex, p, start + RETUNE_AFTER);
-		expect(pms.state.tunes.at(-1)).toEqual({
-			channel: '1000',
-			client: 'plex-web-device',
-			ok: true
-		});
-		await renewTuner(plex, p, start + RETUNE_AFTER + 1_000);
-		expect(tunes()).toBe(before + 1);
-		pms.state.tuner = null;
+		await keepLiveAlive(plex, p, start + LIVE_REPORT_EVERY);
+		expect(reports()).toHaveLength(1);
+		expect(reports()[0]).toMatchObject({ key: '/livetv/sessions/live-1', state: 'playing' });
+		// The report itself counts: no second one right after.
+		await keepLiveAlive(plex, p, Date.now() + 1_000);
+		expect(reports()).toHaveLength(1);
 	});
 
 	it('does nothing for library playback', async () => {
 		const plex = plexFor(db, db.select().from(users).all()[0]);
-		const before = pms.state.tunes.length;
-		await renewTuner(plex, playback('transcode'), Date.now() + RETUNE_AFTER * 10);
-		expect(pms.state.tunes.length).toBe(before);
+		const p = playback('transcode');
+		await keepLiveAlive(plex, p, Date.now() + LIVE_REPORT_EVERY * 10);
+		expect(pms.state.timelines.some((t) => t.session === p.plexSession)).toBe(false);
 	});
 });
 

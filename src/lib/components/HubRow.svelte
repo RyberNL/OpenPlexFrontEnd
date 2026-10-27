@@ -61,7 +61,8 @@
 	>
 		{#each items as item (item.id)}
 			<li class="shrink-0 snap-start {landscape ? 'w-60 sm:w-72' : 'w-32 sm:w-36 lg:w-40'}">
-				<PosterCard {item} {landscape} href={hrefFor?.(item)} />
+				<!-- Every card in a row has one shape, also in rows mixing shows and episodes. -->
+				<PosterCard {item} landscape={!!landscape} href={hrefFor?.(item)} />
 			</li>
 		{/each}
 	</ul>

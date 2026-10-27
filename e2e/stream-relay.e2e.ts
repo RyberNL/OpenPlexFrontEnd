@@ -97,3 +97,49 @@ test('stream URLs require a signed-in session', async ({ page, playwright }) => 
 	expect((await anonymous.get(body.src)).status()).toBe(401);
 	await anonymous.dispose();
 });
+
+test('a cast URL plays without the session cookie, with CORS, until the playback ends', async ({
+	page,
+	playwright
+}) => {
+	const { body } = await startPlayback(page.request, '160');
+	const origin = 'http://localhost:4173';
+	const cast = await page.request.post(`/api/playback/${body.playbackId}/cast`, {
+		headers: { origin }
+	});
+	expect(cast.status()).toBe(200);
+	const { src, contentType } = await cast.json();
+	expect(contentType).toBe('application/x-mpegurl');
+	expect(src).toMatch(/^http:\/\/localhost:\d+\/stream\/cast_[\w-]{32}\/master\.m3u8$/);
+
+	// A Chromecast or Apple TV: no cookie, and (Chromecast) a cross-origin page.
+	const tv = await playwright.request.newContext();
+	const preflight = await tv.fetch(src, {
+		method: 'OPTIONS',
+		headers: { origin: 'https://www.gstatic.com', 'access-control-request-method': 'GET' }
+	});
+	expect(preflight.status()).toBe(204);
+	expect(preflight.headers()['access-control-allow-origin']).toBe('*');
+
+	const master = await tv.get(src, { headers: { origin: 'https://www.gstatic.com' } });
+	expect(master.status()).toBe(200);
+	expect(master.headers()['access-control-allow-origin']).toBe('*');
+	const masterText = await master.text();
+	assertNoSecrets('cast master', masterText);
+	const castId = new URL(src).pathname.split('/')[2];
+	const variant = masterText.split('\n').find((l) => l.startsWith('/stream/'))!;
+	expect(variant.startsWith(`/stream/${castId}/hls/`)).toBe(true);
+	const variantText = await (await tv.get(new URL(variant, src).href)).text();
+	const segment = variantText.split('\n').find((l) => l && !l.startsWith('#'))!;
+	expect(segment.startsWith(`/stream/${castId}/hls/`)).toBe(true);
+	expect((await tv.get(new URL(segment, src).href)).status()).toBe(200);
+
+	// The cast id opens only the stream, not the playback's API.
+	const timeline = new URL(`/api/playback/${castId}/timeline`, src).href;
+	expect((await tv.post(timeline, { headers: { origin } })).status()).toBe(401);
+
+	await page.request.delete(`/api/playback/${body.playbackId}`, { headers: { origin } });
+	expect((await tv.get(src)).status()).toBe(404);
+	expect((await tv.get(new URL('/stream/cast_unknown/master.m3u8', src).href)).status()).toBe(404);
+	await tv.dispose();
+});

@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { PlexError } from '#lib/server/plex/errors.js';
-import { hlsRequest, plexForPlayback, requirePlayback } from '#lib/server/playback/relay.js';
+import { hlsRequest, plexOfPlayback, requireStreamPlayback } from '#lib/server/playback/relay.js';
 import { TRANSCODE_BASE } from '#lib/server/playback/playlist.js';
 import type { RequestHandler } from './$types';
 
@@ -14,10 +14,10 @@ const HEADERS = {
  * progressively converted subtitle stream for an HLS session (streamed through as it grows).
  */
 export const GET: RequestHandler = async (event) => {
-	const playback = requirePlayback(event);
+	const playback = requireStreamPlayback(event);
 	const subtitle = playback.subtitle;
 	if (!subtitle) error(404, 'No subtitle selected');
-	const plex = plexForPlayback(event);
+	const plex = plexOfPlayback(playback);
 
 	if (subtitle.delivery === 'file') {
 		const upstream = await plex.fetch(`/library/streams/${subtitle.streamId}`, {

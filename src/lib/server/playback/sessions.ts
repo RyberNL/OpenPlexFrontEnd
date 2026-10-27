@@ -44,16 +44,24 @@ export type PlaybackSession = {
 	watchedAt: number | null;
 	/**
 	 * Live TV: the tuned channel, the tuner grab to delete when the playback ends, the live session
-	 * key PMS reports progress under, and the tune request with when it was last sent (see
-	 * `renewTuner`).
+	 * key PMS reports progress under, and when progress was last reported (see `keepLiveAlive`).
 	 */
 	live?: {
 		channelId: string;
 		grabKey: string;
 		sessionKey: string;
-		tunePath: string;
-		tunedAt: number;
+		reportedAt: number;
 	};
+	/**
+	 * Stands in for `id` in /stream URLs for devices that fetch the stream themselves, without the
+	 * session cookie (AirPlay, Chromecast). Made on request, see `castIdFor`.
+	 */
+	castId?: string;
+	/**
+	 * PMS's master playlist, fetched once: a cast device reads it again, and PMS's start.m3u8 would
+	 * start the transcode afresh.
+	 */
+	masterPlaylist?: Promise<string>;
 	/** Preview thumbnails, loaded on first use; null when PMS has none or they're unreadable. */
 	previews?: Promise<Bif | null>;
 	/** Whether this playback already marked the item watched. */
@@ -64,6 +72,11 @@ export type PlaybackSession = {
 };
 
 const sessions = new Map<string, PlaybackSession>();
+/** Cast id → playback id. */
+const castIds = new Map<string, string>();
+
+/** Cast ids start with this, so /stream routes can tell them from playback ids. */
+export const CAST_PREFIX = 'cast_';
 
 export function newPlexSessionId() {
 	return randomUUID();
@@ -92,7 +105,30 @@ export function getPlayback(id: string, appSessionHash: string | undefined) {
 }
 
 export function removePlayback(id: string) {
+	const castId = sessions.get(id)?.castId;
+	if (castId) castIds.delete(castId);
 	sessions.delete(id);
+}
+
+/**
+ * The playback's cast id: a secret that gives access to this playback's stream (and nothing
+ * else) for as long as the playback lasts.
+ */
+export function castIdFor(session: PlaybackSession) {
+	if (!session.castId) {
+		session.castId = CAST_PREFIX + randomBytes(24).toString('base64url');
+		castIds.set(session.castId, session.id);
+	}
+	return session.castId;
+}
+
+/** Looks up a playback by its cast id. Counts as activity, like `getPlayback`. */
+export function getCastPlayback(castId: string) {
+	const id = castIds.get(castId);
+	const session = id ? sessions.get(id) : undefined;
+	if (!session) return null;
+	session.lastActiveAt = Date.now();
+	return session;
 }
 
 export function playbacksOf(appSessionHash: string) {

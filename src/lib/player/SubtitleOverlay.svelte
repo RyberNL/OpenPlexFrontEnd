@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { followSubtitle } from './subtitle-feed';
-	import { activeCues, parseSubtitles, type Cue } from './subtitles';
+	import { activeCues, parseSubtitles, settledPart, type Cue } from './subtitles';
 
 	export type SubtitleStyle = {
 		size: 'small' | 'medium' | 'large' | 'xlarge';
@@ -35,8 +35,10 @@
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const seen = new Set<string>();
 		cues = [];
-		followSubtitle(url, controller.signal, (text) => {
-			const fresh = parseSubtitles(text).filter((c) => !seen.has(`${c.start}|${c.text}`));
+		followSubtitle(url, controller.signal, (text, complete) => {
+			const fresh = parseSubtitles(complete ? text : settledPart(text)).filter(
+				(c) => !seen.has(`${c.start}|${c.text}`)
+			);
 			if (!fresh.length) return;
 			fresh.forEach((c) => seen.add(`${c.start}|${c.text}`));
 			cues = [...cues, ...fresh].sort((a, b) => a.start - b.start);
